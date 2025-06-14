@@ -1,0 +1,4 @@
+name = "Circom"
+grammar = "circom"
+path_suffixes = ["circom"]
+line_comments = ["// "]

@@ -1,0 +1,15 @@
+id = "unofficial-circom"
+name = "Circom"
+version = "0.0.1"
+schema_version = 1
+authors = ["ThinkingFrog"]
+description = "Unofficial Circom Lang support for Zed"
+repository = "https://github.com/ThinkingFrog/zed-circom"
+
+[language_servers.circom]
+name = "circom-lsp"
+languages = ["Circom"]
+
+[grammars.circom]
+repository = "https://github.com/Decurity/tree-sitter-circom"
+commit = "02150524228b1e6afef96949f2d6b7cc0aaf999e"
