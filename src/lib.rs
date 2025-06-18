@@ -1,39 +1,53 @@
-use core::panic;
-
 use zed_extension_api as zed;
 
 struct CircomExtension {}
 
-fn locate_cargo(worktree: &zed::Worktree) -> String {
-    match worktree.which("cargo") {
-        Some(cargo_path) => cargo_path,
-        None => {
-            panic!("Rust toolchain required to install circom lsp");
-        }
-    }
-}
-
-fn locate_lsp(language_server_id: &zed::LanguageServerId, worktree: &zed::Worktree) -> String {
+fn locate_lsp(
+    language_server_id: &zed::LanguageServerId,
+    worktree: &zed::Worktree,
+) -> Result<String, String> {
     match worktree.which("circom-lsp") {
-        Some(lsp_path) => lsp_path,
+        Some(lsp_path) => Ok(lsp_path),
         None => {
-            let cargo_path = locate_cargo(worktree);
+            zed::set_language_server_installation_status(
+                language_server_id,
+                &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+            );
+
+            let circom_lsp_repo = "rubydusa/circom-lsp";
+            let release = zed::latest_github_release(
+                circom_lsp_repo,
+                zed::GithubReleaseOptions {
+                    require_assets: true,
+                    pre_release: false,
+                },
+            )?;
+            let platform = match zed::current_platform() {
+                (zed::Os::Linux, _) => "linux",
+                (zed::Os::Mac, _) => "macos",
+                (zed::Os::Windows, _) => "windows",
+            };
+            let asset = release
+                .assets
+                .iter()
+                .find(|x| x.name.contains(platform))
+                .ok_or("No lsp found for your platform")?;
 
             zed::set_language_server_installation_status(
                 language_server_id,
                 &zed::LanguageServerInstallationStatus::Downloading,
             );
 
-            zed::process::Command {
-                command: cargo_path,
-                args: vec!["install".to_string(), "circom-lsp".to_string()],
-                env: worktree.shell_env(),
-            };
+            let bin_path = "circom-lsp".to_string();
+            zed::download_file(
+                &asset.download_url,
+                &bin_path,
+                zed::DownloadedFileType::Uncompressed,
+            )?;
 
-            match worktree.which("circom-lsp") {
-                Some(lsp_path) => lsp_path,
-                None => panic!("Failed to download circom-lsp"),
-            }
+            zed::make_file_executable(&bin_path)?;
+
+            Ok(bin_path)
         }
     }
 }
@@ -51,13 +65,9 @@ impl zed::Extension for CircomExtension {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        let lsp_path = locate_lsp(language_server_id, worktree);
+        let lsp_path = locate_lsp(language_server_id, worktree)?;
 
-        Ok(zed::process::Command {
-            command: lsp_path,
-            args: vec![],
-            env: worktree.shell_env(),
-        })
+        Ok(zed::process::Command::new(lsp_path).envs(worktree.shell_env()))
     }
 }
 
